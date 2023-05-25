@@ -1,0 +1,716 @@
+
+
+---
+title: "Anti-social behaviour as a predictor of fear of crime"
+author: "2194848M"
+date: "2023-04-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(tidyverse)
+library(foreign)
+library(haven)
+library(scales)
+library(pander)
+library(table1)
+library(tab)
+library(stargazer)
+library(Hmisc)
+library(texreg)
+library(xtable)
+library(ggplot2)
+library(broom)
+library(kableExtra)
+library(car)
+library(lmtest)
+library(sandwich)
+library(knitr)
+library(sjPlot)
+library(htmltools)
+
+
+
+
+data_adultnvf<- read_tsv("csew_apr19mar20_nvf.tab")
+
+```
+## Introduction
+
+Anti-social behaviour and crime are often considered to be fundamentally linked forms of damaging and intimidating behaviour. Indeed, several studies have also considered the relationship between fear of crime and incidents of anti-social behaviour. For instance,  Brunton-Smith (2008) finds a consistent and positive relationship between perceptions of disorder (which they define using five variables of anti-social behaviour) and fear of crime. Interestingly, numerous demographic characteristics have been hypothesised to explain an increased fear of crime, ranging from an individual’s race, age, and gender to educational attainment. However, while these may contribute to a fear of crime, it is unlikely to present the whole picture. For example, Scarborough et al. (2010) found that neighbourhood conditions involving social disorder predicted citizens’ fear even after controlling for race, age, gender, and education. Subsequently, this paper will seek to control for neighbourhood conditions by including variables related to social cohesion (years lived in area) and security (Neighbourhood watch) within the respondents area. Further, in their 2004 study, "The Relationship Between Fear of Crime, Anxiety, and Anti-Social Behavior: A Conceptual and Empirical Analysis", Novaco finds that fear of crime is significantly associated with anti-social behaviour and mental health conditions, such as anxiety. Hence, we also incorporate mental health conditions into our selected control variables.
+
+Notably, fear of crime has the capacity to plague individuals even if the likelihood of victimisation is low, having a detrimental impact on their livelihood and making it imperative to address how social disorder experiences influence fear of crime. This paper utilises data from the 2019-20 Crime Survey for England and Wales to investigate the question; to what extent does witnessing or experiencing anti-social behaviour predict a fear of crime? To test the robustness of this relationship, an OLS regression model will be produced, including common control variables such as those mentioned in the previous paragraph, like race, gender, and education. However, to better understand all the variables controlled for in this study, please consult Table 3. The study will begin by explaining the survey, its sample and any filtering processes that were undertaken to clean the data. It will then proceed to visualise the key variables and their relationship in several plots and produce a summary statistics table before undertaking an OLS regression analysis (making appropriate adjustments if necessary) and drawing conclusions from the findings. This paper hypothesises that fear of crime is positively correlated with exposure to anti-social behaviour and that experiences of anti-social behaviour explain a fear of crime in a meaningful way. 
+
+<br>
+
+
+## Data
+
+The 2019-20 Crime Survey was conducted through door-to-door interviews with eligible households within the 42 police force areas across England and Wales, aiming for 625 interviews in each area but being satisfied with 50 interviews above or below this mark. The total number of interviews completed in the data collection process was 32,028. The survey also included a survey for children aged 10-15 and separated victims and non-victims of crime. As responses from past victims of crime can skew our results, we will only focus on the non-victim form data. However, several processes of filtering were necessary for our data to be used, as only respondents who had given a valid response to the variables selected for the regression models were included in the study :
+
+1.	Group D were exclusively asked questions from the "Crime prevention and security: Personal and Online" module, from which our dependent variable (fear of crime) is drawn. The group represented 25% of the sample and was randomly assigned to this module. Further, only 50% of group D (known as group D2) were explicitly asked about the dependent variable. Hence, only their responses are used in this study.
+2.	Any missing values represented by NA were removed from the data. 
+3.	Any values representing a refusal to answer a question were then removed from the data (small number).
+4.	Any values representing a 'Don't Know' response to a question were also removed from the data (small number)
+
+Looking at the independent and dependent variables after this process reduces the number of valid responses to 3,754 for our independent variable question and 3,749 for our dependent variable question. Although this is significantly lower than the original sample, the module structure presented by the survey makes this unavoidable and expected. Notably, this is not our final sample. Our final sample will likely be much smaller since our study will only consider respondents who have given a valid response to every variable we control for. The independent and dependent variables' results after these data-cleaning steps are summarised in Tables 1 and 2. Figures 1 and 2 represent a univariate visualisation of these tables.
+<br>
+
+```{r data look and clean,  include=FALSE}
+#Drop NA on selected IV and DV variables 
+
+data_adultnvf = data_adultnvf %>% drop_na(quallife, asbexp)
+
+######
+
+# Look at quality of life variable (quallife)
+
+glimpse(data_adultnvf$quallife)
+view(data_adultnvf$quallife)
+
+# Drop NAs and create new data frame called qualfear 
+
+qualfear <- data_adultnvf %>% select(quallife, rowlabel) %>% drop_na(quallife)
+view(qualfear)
+
+qualfear %>% count(quallife)
+
+levels(qualfear$quallife)
+
+
+#Filter out 98 (count of 2) and 99 values (count of 99)
+
+qualfear <- qualfear %>% filter(quallife != 98, quallife != 99)
+qualfear %>% count(quallife)
+levels(qualfear$quallife)
+```
+<br>
+<br>
+
+
+
+```{r,  include=FALSE}
+######
+
+#Look at anti-social behaviour experience variable (asbexp)
+
+glimpse(data_adultnvf$asbexp)
+view(data_adultnvf$asbexp)
+
+# Drop NAs and create new data frame called antisoc
+
+antisoc <- data_adultnvf %>% select(asbexp, rowlabel) %>% drop_na(asbexp)
+view(antisoc)
+
+antisoc %>% count(asbexp)
+
+# Filter out 8 (count of 3) and 9 values (count of 2)
+
+antisoc <- antisoc %>% filter(asbexp != 8, asbexp != 9)
+antisoc %>% count(asbexp)
+
+##### At this point data has been cleaned for IV and DV
+```
+
+
+
+```{r, results='asis', echo=FALSE, warning=FALSE}
+
+## IV - Anti-Social behaviour (asbexp)
+
+# Start with police trust and change to factor and add coded levels (e.g A lot)
+
+antisoc <- mutate(antisoc, asbexp = factor(asbexp))
+
+
+levels(antisoc$asbexp) <- c("Yes","No")
+
+# Create a tibble with percentage and rename columns
+
+antisoc_sum_stats <- antisoc %>% count(asbexp) %>%
+  mutate(percentage = (n/sum(n)*100) %>% round(2)) %>%
+  rename("Experienced or witnessed anti-social behaviour in last 12 months"= asbexp, "Count"= n, "Percentage (%)"= percentage)
+
+
+
+
+kable(antisoc_sum_stats, format = "markdown", align = "c", booktabs = TRUE, caption = "Table 1: Independent Variable (exposure to anti-social behaviour)") %>%
+  kable_styling(latex_options = "striped", font_size = 12) %>%
+  add_header_above(c(" " = 1, "Count" = 2, "Percentage (%)" = 2)) %>%
+  column_spec(1, border_right = TRUE) %>%
+  column_spec(2, border_left = TRUE, border_right = TRUE, extra_css = "padding: 10px;") %>%
+  column_spec(3, border_left = TRUE, border_right = TRUE, extra_css = "padding: 10px;") %>%
+  column_spec(4, border_left = TRUE, border_right = TRUE, extra_css = "padding: 10px;") %>%
+  column_spec(5, border_left = TRUE)
+
+
+ 
+```
+<br>
+<br>
+
+
+
+
+```{r, echo=FALSE}
+# Visualise the results in a bar chart
+
+my_colors <- c("#0072B2", "#009E73", "#D55E00", "#CC79A7")
+
+
+antisoc %>%
+  ggplot(aes(x = asbexp, fill = asbexp)) +
+  geom_bar() +
+  scale_fill_manual(values = my_colors) +
+  labs(subtitle = "Experienced or witnessed anti-social behaviour in last 12 months",
+       x = "Response", y = "Count", caption = "Source: 2019-20 Crime Survey for England and Wales") +
+  ggtitle("Figure 1: Distribution of independent variable") +
+  theme_bw() +
+  theme(legend.title = element_blank())
+
+```
+
+
+
+```{r results='asis', echo=FALSE, warning=FALSE}
+##### Now for summary statistics and univariate visualisation
+
+# DV - Fear of crime (quallife)
+
+# Change to a factor 
+
+qualfear <- mutate(qualfear, quallife = factor(quallife))
+
+
+levels(qualfear$quallife) <- c("1 - No Effect","2", "3", "4", "5", "6", "7", "8", "9", "10 - Total Effect")
+
+#Creating small table and basic visualisation
+
+# Create a tibble with percentage and rename columns
+
+Fear_sum_stats <- qualfear %>% count(quallife) %>%
+  mutate(percentage = (n/sum(n)*100) %>% round(2)) %>%
+  rename("Effect of fear of crime on quality of life"= quallife, "Count"= n, "Percentage (%)"= percentage)
+
+kable(Fear_sum_stats, format = "markdown", align = "c", booktabs = TRUE, caption = "Table 2: Dependant Variable (effect of fear of crime  on quality of life)") %>%
+  kable_styling(latex_options = "striped", font_size = 12) %>%
+  add_header_above(c(" " = 1, "Count" = 2, "Percentage (%)" = 2)) %>%
+  column_spec(1, border_right = TRUE) %>%
+  column_spec(2, border_left = TRUE, border_right = TRUE, width = "2em") %>%
+  column_spec(3, border_left = TRUE, border_right = TRUE, width = "2em") %>%
+  column_spec(4, border_left = TRUE, border_right = TRUE, width = "2em") %>%
+  column_spec(5, border_left = TRUE, extra_css = "padding-right: 10px;")
+
+cat("<div style='margin-bottom: 50px;'></div>")
+
+
+```
+
+
+```{r,  echo=FALSE}
+# Visualise the results in a bar graph
+
+qualfear %>%
+  ggplot(aes( x= quallife, fill= quallife)) +
+  geom_bar() +
+  labs(title = " Figure 2: Distribution of dependent variable",
+       x = "Effect of fear of crime", y = "Count", caption = "Source: 2019-20 Crime Survey for England and Wales", subtitle = " Count of effect of fear of crime on quality of life (scale 1 to 10)") +
+  theme_bw() +
+  theme(legend.title = element_blank()) +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  coord_flip()
+
+#####
+```
+
+<br>
+
+Figure 3 represents a bivariate visualisation of the valid responses of our independent and dependent variables. This enables us to better understand how our data looks before we reduce our sample size by including all control variables. The figure shows what proportion of respondents had been exposed to anti-social behaviour in the last 12 months at each possible response to the question of what effect fear of crime had on their quality of life (1-10). 
+
+
+
+
+```{r, include=FALSE}
+##### Data has now been summarised and visualised in a univariate way 
+##### Now to combine data frames and complete a bivariate visualisation 
+
+# Combine the data frames 
+
+overall_df <- merge(qualfear, antisoc, by = 'rowlabel', all.x = TRUE)
+view(overall_df)
+
+# Now to create some summary stats in table form
+# There is 3 NA values - ( 2 at 1 (no effect) and 1 at 5) - drop these from data frame
+
+overall_df <- overall_df %>% drop_na(asbexp)
+
+overall_df %>% count(quallife, asbexp) %>% mutate(percentage = (n/sum(n)*100) %>% round(2)) %>%
+  rename("Effect of fear of crime on quality of life"= quallife,
+         "Experienced or witnessed anti-social behaviour in last 12 momnths"= asbexp, 
+         "Count"= n, "Percentage (%)"= percentage)
+
+overall_df <- overall_df %>% 
+  select(asbexp, quallife) %>% 
+  group_by(quallife) %>%
+  count(asbexp)%>%
+  mutate(percentage = (n/sum(n)*100) %>% round(2))
+```
+<br>
+
+```{r, echo=FALSE}
+# Visualise the data in a bar graph 
+
+overall_df %>% ggplot(aes(x = quallife, y= percentage, fill = asbexp)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = percentage), position=position_dodge(width=0.9), vjust= 0.5, hjust = 1.1) +
+  scale_fill_manual(values = my_colors, name = "Anti-social exposure") +
+  scale_y_continuous() + 
+  labs( title = "Figure 3: Bivariate visualisation of independant variable and dependent variable", subtitle=  "Percentage of anti-social behaviour exposure by effect of fear of crime (%)", 
+        x = "Effect of fear of crime on quality of life",
+        y = "Percentage (%)",
+        caption = "Source: 2019-20 Crime Survey for England and Wales") +
+  coord_flip()
+
+
+```
+
+<br>
+
+As hypothesised, Figure 3 shows that individuals exposed to anti-social behaviour were likelier to answer that fear of crime greatly affected their quality of life. In Figure 3, those exposed to anti-social behaviour only represented  27.7 % of respondents answering that fear of crime had no effect (1 out of 10). However, as the effect of fear of crime increases to 6 out of 10, so does the percentage of respondents exposed to anti-social behaviour, reaching a peak of 59.57%. Notably, from 6 out of 10 to 10 (total effect), the percentage fluctuates between 59.57% and 54.84%.
+
+In our study, the following variables were chosen for analysis: 
+
+```{r, echo=FALSE, warning=FALSE}
+#####Creating variable table 
+
+Title_variable  <-  c( "Effect of fear of crime" ,"Exposure to anti-social behaviour","Exposure to anti-social behaviour", "Age",
+                      "Sex", "Ethnicity", "Education", "Time lived in area", "Neighbourhood watch", "Mental health condition")
+
+Descrption <- c("How much does fear of crime effect the quality life of a respondent on a scale of 1-10 (1- No Effect, 10- Total Effect)","Has the respondent experienced or witnessed anti-social behaviour in the last 12 months","Has the respondent experienced or witnessed anti-social behaviour in the last 12 months", "Age of respondant in years",
+                "The gender of the respondant", "How the respondant would ethnically categorise themselves" ,"Level of education achieved by respondent (highest qualification)", 
+                "Number of years respondant has lived in area", "Is neighbourhood watch operational in the area the respondent lives","Does the respondent  suffer from any mental health condition (such as anxiety)")
+
+
+variable_info <- data.frame(Variable = Title_variable[-2], Description = Descrption[-2])
+
+# Add title above the table
+table_title <- "Table 3: Variable names and descriptions"
+
+kable(variable_info, format = "markdown", booktabs = TRUE, caption = "Table 3: Variable names and descriptions") %>%
+  kable_styling(latex_options = "striped", font_size = 12) %>%
+  add_header_above(c(" " = 1, "Count" = 2, "Percentage (%)" = 2)) %>%
+  column_spec(1, border_right = TRUE) %>%
+  column_spec(2, border_left = TRUE, border_right = TRUE, width = "2em") %>%
+  column_spec(3, border_left = TRUE, border_right = TRUE, width = "2em") %>%
+  column_spec(4, border_left = TRUE, border_right = TRUE, width = "2em") %>%
+  column_spec(5, border_left = TRUE, extra_css = "padding-right: 10px;")
+
+
+
+
+```
+<br>
+
+After accounting for additional control variables, such as age, and applying the earlier mentioned filtering processes (2.,3.,4.), the number of observations which contain valid responses to all the variables considered in our model drops to 526, making the final sample size 526. Table 4 presents the summary statistics for this sample.
+
+<br>
+
+Table 4: Summary statistics
+
+```{r,echo=FALSE}
+#####  Summary stat table
+
+complete_df <-data_adultnvf %>% select(quallife, asbexp, age, sex, educat2, yrsarea, ethgrp2a, neigwat, onsimpg) %>%
+  drop_na(quallife) %>% drop_na(asbexp) %>% drop_na(age) %>% drop_na(sex) %>% drop_na(educat2) %>% drop_na(yrsarea) %>% drop_na(neigwat) %>% drop_na(onsimpg) %>% drop_na(ethgrp2a) %>% 
+  filter(quallife != 98, quallife != 99, asbexp != 8, asbexp != 9, age != 998, age != 999, educat2 != 98, educat2 != 99, yrsarea != 8, neigwat != 3, neigwat  !=4) %>%
+  mutate(quallife = factor(quallife,
+                           levels = 1:10,
+                           labels = c("1 - No Effect","2", "3", "4", "5", "6", "7", "8", "9", "10 - Total Effect"))) %>%
+  mutate(asbexp = factor(asbexp,
+                           levels = 1:2,
+                           labels = c("Yes","No"))) %>%
+  mutate(sex = factor(sex,
+                           levels = 1:2,
+                           labels = c("Male","Female"))) %>%
+  mutate(educat2 = factor(educat2,
+                           levels = 1:8,
+                           labels = c("Higher degree/postgraduate qualifications",
+                                      "First degree",
+                                      "Postgraduate diplomas/Certificates",
+                                      "Professional qualifications at degree level",
+                                      "Diplomas in higher education",
+                                      "A/AS levels or equivalent",
+                                      "Trade Apprenticeship",
+                                      "O Level or equivalent"))) %>%
+  mutate(ethgrp2a = factor(ethgrp2a,
+                          levels = 1:5,
+                          labels = c("White",
+                                     "Mixed",
+                                     "Asian or Asian British",
+                                     "Black or Black British",
+                                     "Chinese or other"))) %>%
+  mutate(yrsarea = factor(yrsarea,
+                           levels = 1:7,
+                           labels = c("Less than 12 months",
+                                      "12 months but less than 2 years",
+                                      "2 years but less than 3 years",
+                                      "3 years but less than 5 years",
+                                      "5 years but less than 10 years",
+                                      "10 years but less than 20 years",
+                                      "20 years or longer"))) %>%
+  mutate(neigwat = factor(neigwat,
+                           levels = 1:2,
+                           labels = c("Yes",
+                                      "No"))) %>%
+  mutate(onsimpg = ifelse(onsimpg == 0, 1, ifelse(onsimpg == 1, 2, onsimpg))) %>%
+  mutate(onsimpg = factor(onsimpg,
+                          levels = 1:2,
+                          labels = c("Yes", "No")))
+  
+  
+complete_df_renamed <- complete_df %>%
+  rename(`Effect of fear of crime` = quallife,
+         `Age` = age,
+         `Sex` = sex,
+         `Education Level` = educat2,
+         `Years of Living in the Area` = yrsarea,
+         `Ethnic Group` = ethgrp2a,
+         `Exposure to antisocial` = asbexp,
+         `Neighbourhood Watch` = neigwat,
+         `Mental Health Condition`= onsimpg)
+
+table1(~ `Effect of fear of crime` + `Age` + `Sex` + `Education Level` + `Years of Living in the Area` + `Ethnic Group` + `Neighbourhood Watch` + `Mental Health Condition`| `Exposure to antisocial`, data = complete_df_renamed, title = "Table 4: Summary statistics")
+
+
+```
+<br>
+
+Table 4 and Figure 4 show that after filtering down our sample size to 526, our hypothesis that recent anti-social exposure increases fear of crime still appears to hold. Although in Figure 4, the proportion of respondents experiencing or witnessing anti-social behaviour in the last 12 months does fluctuate with an increased effect of fear of crime in quality of life, there is a general upwards trend with a 42.47% increase in those exposed to anti-social behaviour at the fear of crime total effect level (10) from the no-effect level (1).
+
+<br>
+
+```{r, echo=FALSE}
+newoverall_df <- complete_df %>% 
+  select(asbexp, quallife) %>% 
+  group_by(quallife) %>%
+  count(asbexp)%>%
+  mutate(percentage = (n/sum(n)*100) %>% round(2))
+
+newoverall_df %>% ggplot(aes(x = quallife, y= percentage, fill = asbexp)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = percentage), position=position_dodge(width=0.9), vjust= 0.5, hjust = 1.1) +
+  scale_fill_manual(values = my_colors, name = "Anti-social exposure") +
+  scale_y_continuous() + 
+  labs( title = "Figure 4: Bivariate visualisation of final sample", subtitle=  "Percentage of anti-social behaviour exposure by effect of fear of crime (%)", 
+        x = "Effect of fear of crime on quality of life",
+        y = "Percentage (%)",
+        caption = "Source: 2019-20 Crime Survey for England and Wales") +
+  coord_flip()
+```
+
+<br>
+Chi-squared test
+
+At this point, we will utilise a Chi-squared test to compare the observed data with the expected data and to assess whether any difference between the two is due to chance or a real difference between the variables. Equally, it will help us evaluate whether our variables are related or independent. The null hypothesis is that the variable in question (e.g."Exposure to anti-social behaviour") does not influence fear of crime (Effect of fear of crime on quality of life).
+
+
+```{r, include=FALSE}
+# Convert variables to factors
+complete_df_renamed$`Effect of fear of crime` <- as.factor(complete_df_renamed$`Effect of fear of crime`)
+complete_df_renamed$`Exposure to antisocial` <- as.factor(complete_df_renamed$`Exposure to antisocial`)
+
+
+# chi-squared test with Monte Carlo simulation
+test_result <- chisq.test(complete_df_renamed$`Effect of fear of crime`, complete_df_renamed$`Exposure to antisocial`, 
+                          simulate.p.value = TRUE, B = 10000)
+print(test_result)
+```
+
+
+```{r, include=FALSE}
+# Convert variables to factors 
+complete_df_renamed$Age <- as.factor(complete_df_renamed$Age)
+complete_df_renamed$Sex <- as.factor(complete_df_renamed$Sex)
+complete_df_renamed$`Education Level` <- as.factor(complete_df_renamed$`Education Level`)
+complete_df_renamed$`Years of Living in the Area` <- as.factor(complete_df_renamed$`Years of Living in the Area`)
+complete_df_renamed$`Ethnic Group` <- as.factor(complete_df_renamed$`Ethnic Group`)
+complete_df_renamed$`Neighbourhood Watch` <- as.factor(complete_df_renamed$`Neighbourhood Watch`)
+complete_df_renamed$`Mental Health Condition` <- as.factor(complete_df_renamed$`Mental Health Condition`)
+
+# Perform chi-squared tests with simulated p-values for each pair of variables
+test_exposure <- chisq.test(complete_df_renamed$`Effect of fear of crime`, complete_df_renamed$`Exposure to antisocial`, simulate.p.value = TRUE, B = 10000)
+test_age <- chisq.test(complete_df_renamed$`Effect of fear of crime`, complete_df_renamed$Age, simulate.p.value = TRUE, B = 10000)
+test_sex <- chisq.test(complete_df_renamed$`Effect of fear of crime`, complete_df_renamed$Sex, simulate.p.value = TRUE, B = 10000)
+test_education <- chisq.test(complete_df_renamed$`Effect of fear of crime`, complete_df_renamed$`Education Level`, simulate.p.value = TRUE, B = 10000)
+test_years <- chisq.test(complete_df_renamed$`Effect of fear of crime`, complete_df_renamed$`Years of Living in the Area`, simulate.p.value = TRUE, B = 10000)
+test_ethnic <- chisq.test(complete_df_renamed$`Effect of fear of crime`, complete_df_renamed$`Ethnic Group`, simulate.p.value = TRUE, B = 10000)
+test_watch <- chisq.test(complete_df_renamed$`Effect of fear of crime`, complete_df_renamed$`Neighbourhood Watch`, simulate.p.value = TRUE, B = 10000)
+test_health <- chisq.test(complete_df_renamed$`Effect of fear of crime`, complete_df_renamed$`Mental Health Condition`, simulate.p.value = TRUE, B = 10000)
+
+# Print results
+print(test_exposure)
+print(test_age)
+print(test_sex)
+print(test_education)
+print(test_years)
+print(test_ethnic)
+print(test_watch)
+print(test_health)
+
+```
+
+```{r, echo=FALSE, warning=FALSE}
+# Create a data frame to store the results
+results <- data.frame(
+  Variable = c("Exposure to anti-social","Age", "Sex", "Education Level", "Years of Living in the Area", "Ethnic Group", "Neighbourhood watch", "Mental Health Condition"),
+  X_squared = c(test_exposure$statistic, test_age$statistic, test_sex$statistic, test_education$statistic, test_years$statistic, test_ethnic$statistic,test_watch$statistic, test_health$statistic),
+  p_value = c(test_exposure$p.value, test_age$p.value, test_sex$p.value, test_education$p.value, test_years$p.value, test_ethnic$p.value, test_watch$p.value, test_health$statistic)) %>% rename("X Squared"= X_squared, "P-value"= p_value)
+
+# Generate the results table
+
+kable(results, format = "markdown", booktabs = TRUE) %>%
+  kable_styling(latex_options = "striped", font_size = 12) %>%
+  add_header_above(c(" " = 1, "Count" = 2, "Percentage (%)" = 2)) %>%
+  column_spec(1, border_right = TRUE) %>%
+  column_spec(2, border_left = TRUE, border_right = TRUE, extra_css = "padding: 10px;") %>%
+  column_spec(3, border_left = TRUE, border_right = TRUE, extra_css = "padding: 10px;")
+  
+```
+
+<br>
+
+1. Exposure to anti-social: p-value = 0.00009999, significant at the 0.05 level.
+
+2. Age: p-value = 0.28927107, not significant at the 0.05 level.
+
+3. Sex: p-value = 0.01369863, significant at the 0.05 level.
+
+4. Education Level: p-value = 0.09419058, not significant at the 0.05 level.
+
+5. Years of Living in the Area: p-value = 0.14638536, not significant at the 0.05 level.
+
+6. Ethnic Group: p-value = 0.00659934, significant at the 0.05 level.
+
+7. Neighbourhood Watch: p-value = 0.94790521, not significant at the 0.05 level.
+
+8. Mental Health Condition: p-value = 19.44909771, not significant at the 0.05 level.
+
+Based on these results, there are significant associations between "Effect of fear of crime" and "Sex", "Ethnic Group", and "Exposure to anti-social". This suggests that there is evidence to reject the null hypothesis of no association between these variables and the dependent variable (Effect of fear of crime) and to conclude that there is a significant association. 
+
+Notably, "Education Level" has a p-value of 0.095, which is greater than 0.05 but less than 0.1, suggesting that there is some evidence for an association between Education Level and the outcome variable. However, it is not strong enough to reject the null hypothesis at the 0.05 level of significance.
+
+Hence, the relationships between "Effect of fear of crime" and "Age", "Education Level", "Years of Living in the Area", "Neighborhood watch", and "Mental Health condition" are not significant at the 0.05 level. This suggests there is no evidence to reject the null hypothesis of no association between these variables and the dependent variable (Effect of fear of crime).
+
+<br>
+
+```{r, echo=FALSE}
+complete_df_renamed <- complete_df %>%
+  rename(`Effect of fear of crime` = quallife,
+         `Age` = age,
+         `Sex` = sex,
+         `Education Level` = educat2,
+         `Years of Living in the Area` = yrsarea,
+         `Ethnic Group` = ethgrp2a,
+         `Exposure to antisocial` = asbexp,
+         `Neighbourhood Watch` = neigwat,
+         `Mental Health Condition`= onsimpg)
+```
+
+## Analysis
+
+<br>
+
+As we have assessed that there is a noticeable difference in the effect of the fear of crime variable when respondents have been exposed to anti-social behaviour in the last 12 months, it is now important to test whether other characteristics of the sample may explain this difference. As previously mentioned, past studies have included variables relating to demographic features, neighbourhood cohesion and safety, as well as psychological factors. In order to do this, we use a linear regression method of analysis. Table 5 represents the results of our four models. The initial model (model 1) only accounts for our independent variable, "Exposure to anti-social behaviour)". Our second model (Model 2) builds on this by adding demographic factors. Our third model (Model 3) then adds neighbourhood cohesion and safety factors. Finally, our last model (Model 4) adds our psychological variable relating to mental health conditions.
+
+<br>
+
+```{r, echo=FALSE}
+model1_1 <- lm(as.numeric(`Effect of fear of crime`) ~ `Exposure to antisocial`, data = complete_df_renamed)
+
+model2_2 <- lm(as.numeric(`Effect of fear of crime`) ~ `Exposure to antisocial`+ `Age` + `Sex` + `Education Level` + `Ethnic Group`, data = complete_df_renamed)
+
+model3_3 <- lm(as.numeric(`Effect of fear of crime`) ~ `Exposure to antisocial`+ `Age` + `Sex` + `Education Level` + `Ethnic Group`+ `Years of Living in the Area` + `Neighbourhood Watch`, data = complete_df_renamed)
+
+model4_4 <- lm(as.numeric(`Effect of fear of crime`) ~ `Exposure to antisocial`+ `Age` + `Sex` + `Education Level` + `Ethnic Group`+ `Years of Living in the Area` + `Neighbourhood Watch` + `Mental Health Condition`, data = complete_df_renamed)
+
+```
+
+
+Table 5: Table of regression model results
+
+```{r, echo=FALSE}
+screenreg(list(model1_1, model2_2, model3_3, model4_4))
+
+```
+<br>
+
+Results:
+
+Model 1: The dependent variable is negatively correlated with exposure to anti-social behaviour, and this correlation is statistically significant at p 0.001. The independent variable only accounts for 5% of the variation in the dependent variable, according to the model's R-squared value of 0.05.
+
+Model 2: Age, Sex, Education and Ethnic Group are now included as predictor variables in addition to exposure to anti-social behaviour. Age, education, and Ethnic group (Black or Black British) have a statistically significant connection with the dependent variable. Age and Education (Diploma in higher education) at the p 0.05 level and Ethnic group (black or Black British) at the p 0.001 level. Age has a negative connection, while the Education and Ethnic group connection is positive. The independent variables jointly account for 12% of the variation in the dependent variable, according to the model's R-squared value of 0.12, which is calculated.
+
+Model 3: In addition to the factors in Model 2, predictor variables for Years of Living in the Area and Neighborhood Watch are also included. At p 0.05, neither of these variables are associated with the dependent variable in a statistically significant way. The dependent variable's variation is explained by the independent variables by 13%, according to the model's R-squared value of 0.13. Age and education are again statistically significant at p 0.05. Ethnic group (black or Black British) is again statistically significant but at p 0.01.
+
+Model 4: In addition to the variables in Model 3, a predictor variable for mental health conditions is also included. At p 0.05, there is no statistically significant association between this variable and the dependent variable. The dependent variable's variation is explained by the independent variables by 13%, according to the model's R-squared value of 0.13. Education is again statistically significant at p 0.05. Ethnic group (black or Black British) is statistically significant at p 0.001.
+
+Findings:
+
+The model with the greatest R-squared value (0.13), Model 4, which takes into account all the independent variables, accounts for 13% of the variance in the dependent variable. In all four models, exposure to anti-social behaviour has a detrimental and statistically significant impact on the fear of crime. Age affects the fear of crime negatively and significantly in Model 2 and 3 but not significantly in Model 4. Only 'Diploma in higher education' and identifying as 'Black or Black British' in our ethnic group and education variables were statistically significant in Model 2, 3 and 4. All other variables, such as sex, do not statistically affect the fear of crime in any of the models.
+
+
+<br>
+
+# Assumption testing
+
+<br>
+
+Thus far, we have assumed that are independent variables are exogenous and so are not dependent on any of the other variables considered in our model. However, it is important to be sure of this as if the variables are instead endogenous and therefore depend on each other; our model may face multicollinearity issues. Creating challenges for determining the individual contribution of each variable to the dependent variable. To ensure that our variables are exogenous, we undertake a multicollinearity test. 
+
+<br>
+
+```{r, echo=FALSE}
+
+vif(model4_4)
+
+
+```
+<br>
+
+The multicollinearity test results show that multicollinearity is not an issue in the model. The highest Variance Inflation Factor (VIF) value is 1.83, and all VIF values are relatively low (below 2.5), which is well below the threshold of 5 typically used, suggesting that the variables are not highly correlated and are indeed independent.
+
+<br>
+
+Next, we utilise a Residual vs Fitted values plot (Figure 5) to check the assumption of homoscedasticity. 
+
+<br>
+
+```{r,echo=FALSE}
+
+# Get the residuals and fitted values for model4
+
+resid <- residuals(model4_4)
+fitted <- fitted(model4_4)
+
+# Create the plot
+
+ggplot(data = data.frame(resid, fitted), aes(x = fitted, y = resid)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = 'gam', formula = y ~ s(x, bs = 'cs')) +
+  labs(x = 'Fitted Values', y = 'Residuals') +
+  ggtitle('Figure 5: Residuals vs. Fitted Values for Model 4')
+
+```
+<br>
+
+Figure 5 shows that the residuals are randomly scattered around the horizontal line at zero, indicating no apparent pattern of non-randomness. This implies that the assumption of linearity and independence will likely be met. Indeed, there is no U-shaped or funnel-shaped distribution of points which would indicate that the assumption of homoscedasticity was violated.
+
+<br>
+
+```{r, echo=FALSE}
+resettest(model4_4)
+
+```
+
+<br>
+
+The Reset test statistic, which is 5.21 according to the data, is statistically significant at the 0.05 level. The null hypothesis of the correct specification should be rejected since the p-value of 0.005761 is below the significance level of 0.05. 
+
+<br>
+
+```{r, echo=FALSE}
+bptest(model4_4)
+
+```
+<br>
+
+The studentized Breusch-Pagan test on Model 4 yielded the following results: a test statistic of 30.341 with 22 degrees of freedom and a p-value of 0.1104. We are unable to reject the null hypothesis of homoscedasticity since the p-value is higher than the significance level of 0.05. Hence, we conclude that there is no evidence of heteroscedasticity in the model based on the results of the BP test.
+
+
+<br>
+
+Our model also operates under the assumption that the residuals follow a normal distribution. We produce a Q-Q plot to check this through visualisation (Figure 6).  
+
+<br>
+
+```{r, echo=FALSE}
+library(ggplot2)
+
+# Create a data frame of the residuals
+resid_df <- data.frame(residuals = residuals(model4_4))
+
+
+
+ggplot(resid_df, aes(sample = residuals)) +
+  geom_qq(shape = 1) +
+  geom_qq_line() +
+  xlab("Theoretical Quantiles") +
+  ylab("Sample Quantiles") +
+  ggtitle("Figure 6: Normal Q-Q Plot of Model 4 Residuals")
+
+```
+<br>
+
+Our Q-Q plot shows where the residuals deviate from the 45-degree line, especially on the tail ends. These deviations suggest that the residuals are not normally distributed, which may violate the normality assumption of our regression model. However, the residuals do not have heavy tails, and only a handful of points lie outside the -2 to 2 range. Further, OLS (Ordinary Least Squares) regression models are relatively robust to deviations from normality provided an adequate sample size. Consequently, we can still have confidence in the proficiency of our model to test our hypothesis. 
+
+<br>
+
+
+As a result, we select Model 4 for our final specification. However, it is presented with heteroscedasticity robust standard errors as Model 5.
+
+
+```{r, echo=FALSE}
+
+# Heteroscedasticity robust standard errors
+
+custom_model_name <- c("Model 5")
+
+model5_5 <- coeftest(model4_4, vcov = vcovHC(model4_4, type = "HC1"))
+
+screenreg(model5_5, custom.model.names = custom_model_name)
+```
+<br>
+
+Using the new standard errors has no significant impact on statistical significance. As expected, the exposure to the anti-social behaviour variable remains highly statistically significant in the model.
+
+<br>
+
+## Discussion and Conclusion
+
+This study has set out to investigate the impact of various factors on the fear of crime, using data from the 2019-20 Crime Survey conducted across England and Wales with a sample of 526 observations. Our research aimed to determine the influence of exposure to anti-social behaviour, demographic characteristics, neighbourhood characteristics and mental health conditions on the fear of crime among respondents. Four regression models were utilised to analyse the data, with the final model (Model 4) being the most comprehensive.
+
+Our findings indicate that exposure to anti-social behaviour has a significant negative impact on the fear of crime across all four models. The model with the highest R-squared value (0.13), Model 4, which considers all independent variables, accounts for 13% of the variance in the dependent variable. Age has a negative and statistically significant effect on the fear of crime in Models 2 and 3. This may result from older populations generally being more vulnerable to crime. Education at the higher education diploma level and belonging to the Black or Black British ethnic group were statistically significant predictor variables across Models 3, 4 and 5. It is challenging to explain education as other higher education levels were not significant, but greater fear of crime amongst a particular ethnic group may result from fear of discrimination and racial crime. Other factors such as gender, years of living in the area, neighbourhood watch and mental health conditions do not significantly impact the fear of crime in any of the models.
+
+Notably, our research is limited by the availability of certain variables in the data set. These include variables relating to safety measures, such as whether the respondent had a burglar alarm. Since security measures are likely to influence fear of crime, the inclusion of these variables may have affected the estimated relationships. In addition, we have not included income in our demographic control variables which may have some influence if we consider that higher earners are more likely to live in affluent areas where crime is less prominent. Furthermore, it is important to note that our data only considers non-victims and excludes children, so our findings can only be applied within this context. Hence, while our study has made strides in identifying some factors that influence the fear of crime, it also highlights the need for further research to uncover additional determinants and the underlying mechanisms behind these associations.
+
+In conclusion, our analysis demonstrates that exposure to anti-social behaviour plays a significant role in shaping the fear of crime. Future research should explore other potential factors and address the current study's limitations to provide a more comprehensive understanding of the factors influencing the fear of crime. This knowledge can help inform policies and interventions to reduce fear and improve overall community safety.
+
+
+Word Count = 2960
+
+
+## Reflective Statement 
+
+Based on the learning outcomes of this course and assignment, I consider this work worthy of an A4. My paper effectively chose a research question and appropriate data set to support its investigation. I have cleaned and managed my data appropriately and provided summary statistics and univariate and bivariate visualisations. Further, I produced several regression models and applied model specification tests to confirm the robustness of my model. This enabled me to test my hypotheses and ultimately answer the research question posed by my study. The work was undoubtedly challenging, but I now feel confident in my ability to undertake quantitative analysis methods using R Studio. However, I appreciate that there may be some flaws in the paper, which I have missed since it is my first time undertaking this form of research. 
+
+
+## Bibliography
+
+1. Brunton-Smith, I. (2008). Untangling the Relationship Between Fear of Crime and Perceptions of Disorder: Evidence from a Longitudinal Study of Young People in England and Wales. European Journal of Criminology, 5(4), 411-431.
+
+2. Novaco, R. A. (2004). The relationship between fear of crime, anxiety, and anti-social behavior: A conceptual and empirical analysis. Journal of Interpersonal Violence, 19(4), 429-454.
+
+3. Scarborough, K. E. (2010). Assessing the relationship between individual characteristics, neighborhood context, and fear of crime. Journal of Criminal Justice, 38(4), 819-826.
+
+4. UK Data Service (2023) UK Data Service › Study. Available at: https://beta.ukdataservice.ac.uk/datacatalogue/studies/study?id=8812 (Accessed: 13th of March 2023).
+
+
+
+
+
+
+
+
